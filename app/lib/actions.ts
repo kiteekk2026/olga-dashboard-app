@@ -9,6 +9,62 @@ import { AuthError } from 'next-auth';
 
 const sql = postgres(process.env.POSTGRES_URL!, { ssl: process.env.POSTGRES_URL?.includes('127.0.0.1') ? false : 'require' });
 
+const ALLOWED_AVATARS = [
+  '/customers/amy-burns.png',
+  '/customers/balazs-orban.png',
+  '/customers/delba-de-oliveira.png',
+  '/customers/evil-rabbit.png',
+  '/customers/lee-robinson.png',
+  '/customers/michael-novotny.png',
+] as const;
+
+const CustomerFormSchema = z.object({
+  name: z.string().min(1, { message: 'Please enter a name.' }),
+  email: z.string().email({ message: 'Please enter a valid email.' }),
+  image_url: z.enum(ALLOWED_AVATARS, {
+    invalid_type_error: 'Please choose an avatar.',
+  }),
+});
+
+export type CustomerState = {
+  errors?: {
+    name?: string[];
+    email?: string[];
+    image_url?: string[];
+  };
+  message?: string | null;
+};
+
+export async function createCustomer(prevState: CustomerState, formData: FormData) {
+  const validatedFields = CustomerFormSchema.safeParse({
+    name: formData.get('name'),
+    email: formData.get('email'),
+    image_url: formData.get('image_url'),
+  });
+
+  if (!validatedFields.success) {
+    return {
+      errors: validatedFields.error.flatten().fieldErrors,
+      message: 'Missing or invalid fields. Failed to create customer.',
+    };
+  }
+
+  const { name, email, image_url } = validatedFields.data;
+
+  try {
+    await sql`
+      INSERT INTO customers (name, email, image_url)
+      VALUES (${name}, ${email}, ${image_url})
+    `;
+  } catch (error) {
+    console.error(error);
+    return { message: 'Database Error: Failed to create customer.' };
+  }
+
+  revalidatePath('/dashboard/customers');
+  redirect('/dashboard/customers');
+}
+
 const FormSchema = z.object({
   id: z.string(),
   customerId: z.string({
@@ -22,6 +78,41 @@ const FormSchema = z.object({
   }),
   date: z.string(),
 });
+
+export async function updateCustomer(
+  id: string,
+  prevState: CustomerState,
+  formData: FormData,
+) {
+  const validatedFields = CustomerFormSchema.safeParse({
+    name: formData.get('name'),
+    email: formData.get('email'),
+    image_url: formData.get('image_url'),
+  });
+
+  if (!validatedFields.success) {
+    return {
+      errors: validatedFields.error.flatten().fieldErrors,
+      message: 'Missing or invalid fields. Failed to update customer.',
+    };
+  }
+
+  const { name, email, image_url } = validatedFields.data;
+
+  try {
+    await sql`
+      UPDATE customers
+      SET name = ${name}, email = ${email}, image_url = ${image_url}
+      WHERE id = ${id}
+    `;
+  } catch (error) {
+    console.error(error);
+    return { message: 'Database Error: Failed to update customer.' };
+  }
+
+  revalidatePath('/dashboard/customers');
+  redirect('/dashboard/customers');
+}
 
 const CreateInvoice = FormSchema.omit({ id: true, date: true });
 

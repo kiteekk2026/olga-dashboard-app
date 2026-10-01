@@ -6,6 +6,7 @@ import {
   InvoicesTable,
   LatestInvoiceRaw,
   Revenue,
+  CustomerForm,
 } from './definitions';
 import { formatCurrency } from './utils';
 
@@ -237,5 +238,58 @@ export async function fetchFilteredCustomers(
   } catch (err) {
     console.error('Database Error:', err);
     throw new Error('Failed to fetch customer table.');
+  }
+}
+
+
+export async function fetchCustomerById(id: string) {
+  try {
+    const data = await sql<CustomersTableType[]>`
+      SELECT
+        customers.id,
+        customers.name,
+        customers.email,
+        customers.image_url,
+        COUNT(invoices.id) AS total_invoices,
+        SUM(CASE WHEN invoices.status = 'pending' THEN invoices.amount ELSE 0 END) AS total_pending,
+        SUM(CASE WHEN invoices.status = 'paid' THEN invoices.amount ELSE 0 END) AS total_paid
+      FROM customers
+      LEFT JOIN invoices ON customers.id = invoices.customer_id
+      WHERE customers.id = ${id}
+      GROUP BY customers.id, customers.name, customers.email, customers.image_url
+    `;
+
+    if (data.length === 0) return undefined;
+
+    const customer = data[0];
+    return {
+      ...customer,
+      total_pending: formatCurrency(customer.total_pending),
+      total_paid: formatCurrency(customer.total_paid),
+    };
+  } catch (error: any) {
+    // Невалидный UUID (например /dashboard/customers/not-a-real-id) — Postgres
+    // кидает ошибку ДО того, как мы успели проверить "не найдено". Код 22P02 —
+    // это именно "invalid input syntax for type uuid". Ловим её отдельно и
+    // возвращаем undefined, а не пробрасываем дальше — иначе вместо notFound()
+    // сработает error.tsx и пользователь увидит 500 вместо 404.
+    if (error.code === '22P02') return undefined;
+    console.error('Database Error:', error);
+    throw new Error('Failed to fetch customer.');
+  }
+}
+
+export async function fetchInvoicesByCustomerId(id: string) {
+  try {
+    const data = await sql<InvoicesTable[]>`
+      SELECT id, amount, date, status
+      FROM invoices
+      WHERE customer_id = ${id}
+      ORDER BY date DESC
+    `;
+    return data;
+  } catch (error) {
+    console.error('Database Error:', error);
+    throw new Error('Failed to fetch customer invoices.');
   }
 }

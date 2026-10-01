@@ -4,6 +4,7 @@ import { lusitana } from '@/app/ui/fonts';
 import { CustomersTableType, FormattedCustomersTable } from '@/app/lib/definitions';
 import { formatCurrency } from '@/app/lib/utils';
 import { fetchFilteredCustomers } from '@/app/lib/data';
+import Link from 'next/link';
 
 export default async function CustomersTable({
   query,
@@ -37,7 +38,9 @@ export default async function CustomersTable({
                               width={28}
                               height={28}
                             />
-                            <p>{customer.name}</p>
+                            <Link href={`/dashboard/customers/${customer.id}`} className="hover:underline">
+                            {customer.name}
+                            </Link>
                           </div>
                         </div>
                         <p className="text-sm text-gray-500">
@@ -57,6 +60,13 @@ export default async function CustomersTable({
                     </div>
                     <div className="pt-4 text-sm">
                       <p>{customer.total_invoices} invoices</p>
+                    </div>
+                    <div className="flex w-full items-center justify-between pt-4">
+                    <p>{customer.total_invoices} invoices</p>
+                    <div className="flex justify-end gap-2">
+                       <UpdateCustomer id={customer.id} />
+                       <DeleteCustomer id={customer.id} />
+                     </div>
                     </div>
                   </div>
                 ))}
@@ -79,6 +89,9 @@ export default async function CustomersTable({
                     <th scope="col" className="px-4 py-5 font-medium">
                       Total Paid
                     </th>
+                    <th scope="col" className="relative pb-4 pl-3 pr-6 pt-2 sm:pr-6">
+                    <span className="sr-only">Edit</span>
+                    </th>
                   </tr>
                 </thead>
 
@@ -94,7 +107,9 @@ export default async function CustomersTable({
                             width={28}
                             height={28}
                           />
-                          <p>{customer.name}</p>
+                          <Link href={`/dashboard/customers/${customer.id}`} className="hover:underline">
+                            {customer.name}
+                          </Link>
                         </div>
                       </td>
                       <td className="whitespace-nowrap bg-white px-4 py-5 text-sm">
@@ -108,6 +123,12 @@ export default async function CustomersTable({
                       </td>
                       <td className="whitespace-nowrap bg-white px-4 py-5 text-sm group-first-of-type:rounded-md group-last-of-type:rounded-md">
                         {customer.total_paid}
+                      </td>
+                      <td className="whitespace-nowrap bg-white py-5 pl-6 pr-3 text-sm group-first-of-type:rounded-md group-last-of-type:rounded-md">
+                      <div className="flex justify-end gap-3">
+                          <UpdateCustomer id={customer.id} />
+                           <DeleteCustomer id={customer.id} />
+                       </div>
                       </td>
                     </tr>
                   ))}

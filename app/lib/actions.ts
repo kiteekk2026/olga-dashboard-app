@@ -234,8 +234,13 @@ export async function authenticate(
 
 export async function deleteCustomer (id: string) {
   try {
-  await sql`DELETE FROM customers WHERE id = ${id}`;
-  revalidatePath('/dashboard/customers');
+    await sql.begin(async (tx) => {
+      await tx`DELETE FROM invoices WHERE customer_id = ${id}`;
+      await tx`DELETE FROM customers WHERE id = ${id}`;
+    });
+    revalidatePath('/dashboard/customers');
+    revalidatePath('/dashboard/invoices');
+    revalidatePath('/dashboard');
   } catch (error) {
     console.error(error);
   }

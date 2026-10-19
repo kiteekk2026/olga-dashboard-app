@@ -26,7 +26,7 @@ export default function Form({ customer }: { customer: FormattedCustomersTable  
             id="name"
             name="name"
             type="text"
-            defaultValue={customer.name}
+            defaultValue={state.values?.name ?? customer.name}
             className="block w-full rounded-md border border-gray-200 py-2 px-3 text-sm outline-2 placeholder:text-gray-500"
             aria-describedby="name-error"
           />
@@ -43,7 +43,7 @@ export default function Form({ customer }: { customer: FormattedCustomersTable  
             id="email"
             name="email"
             type="email"
-            defaultValue={customer.email}
+            defaultValue={state.values?.email ?? customer.email}
             className="block w-full rounded-md border border-gray-200 py-2 px-3 text-sm outline-2 placeholder:text-gray-500"
             aria-describedby="email-error"
           />
@@ -63,7 +63,7 @@ export default function Form({ customer }: { customer: FormattedCustomersTable  
                   type="radio"
                   name="image_url"
                   value={`/customers/${name}.png`}
-                  defaultChecked={customer.image_url === `/customers/${name}.png`}
+                  defaultChecked={(state.values?.image_url ?? customer.image_url) === `/customers/${name}.png`}
                   className="peer sr-only"
                   aria-describedby="avatar-error"
                 />
@@ -84,6 +84,11 @@ export default function Form({ customer }: { customer: FormattedCustomersTable  
           </div>
         </fieldset>
       </div>
+      <div aria-live="polite" aria-atomic="true">
+        {state.message ? (
+           <p className="mt-4 text-sm text-red-500">{state.message}</p>
+            ) : null}
+        </div>      
       <div className="mt-6 flex justify-end gap-4">
         <Link
           href="/dashboard/customers"

@@ -20,7 +20,7 @@ const ALLOWED_AVATARS = [
 
 const CustomerFormSchema = z.object({
   name: z.string().min(1, { message: 'Please enter a name.' }),
-  email: z.string().email({ message: 'Please enter a valid email.' }),
+  email: z.string().trim().toLowerCase().email({ message: 'Please enter a valid email.' }),
   image_url: z.enum(ALLOWED_AVATARS, {
     invalid_type_error: 'Please choose an avatar.',
   }),
@@ -33,7 +33,27 @@ export type CustomerState = {
     image_url?: string[];
   };
   message?: string | null;
+  values?: { name: string; email: string; image_url: string };
 };
+
+function submittedValues(formData: FormData) {
+  return {
+    name: String(formData.get('name') ?? ''),
+    email: String(formData.get('email') ?? ''),
+    image_url: String(formData.get('image_url') ?? ''),
+  };
+}
+
+function isDuplicateEmailError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === '23505' && // unique_violation
+    'constraint_name' in error &&
+    error.constraint_name === 'customers_email_key'
+  );
+}
 
 export async function createCustomer(prevState: CustomerState, formData: FormData) {
   const validatedFields = CustomerFormSchema.safeParse({
@@ -46,6 +66,7 @@ export async function createCustomer(prevState: CustomerState, formData: FormDat
     return {
       errors: validatedFields.error.flatten().fieldErrors,
       message: 'Missing or invalid fields. Failed to create customer.',
+      values: submittedValues(formData),
     };
   }
 
@@ -57,8 +78,18 @@ export async function createCustomer(prevState: CustomerState, formData: FormDat
       VALUES (${name}, ${email}, ${image_url})
     `;
   } catch (error) {
+    if (isDuplicateEmailError(error)) {
+      return {
+        errors: { email: ['This email is already in use.'] },
+        message: 'Failed to create customer.',
+        values: submittedValues(formData),
+      };
+    }
     console.error(error);
-    return { message: 'Database Error: Failed to create customer.' };
+    return {
+      message: 'Database Error: Failed to create customer.',
+      values: submittedValues(formData),
+    };
   }
 
   revalidatePath('/dashboard/customers');
@@ -94,6 +125,7 @@ export async function updateCustomer(
     return {
       errors: validatedFields.error.flatten().fieldErrors,
       message: 'Missing or invalid fields. Failed to update customer.',
+      values: submittedValues(formData),
     };
   }
 
@@ -106,8 +138,18 @@ export async function updateCustomer(
       WHERE id = ${id}
     `;
   } catch (error) {
+    if (isDuplicateEmailError(error)) {
+      return {
+        errors: { email: ['This email is already in use.'] },
+        message: 'Failed to update customer.',
+        values: submittedValues(formData),
+      };
+    }
     console.error(error);
-    return { message: 'Database Error: Failed to update customer.' };
+    return {
+      message: 'Database Error: Failed to update customer.',
+      values: submittedValues(formData),
+    };
   }
 
   revalidatePath('/dashboard/customers');
@@ -232,16 +274,30 @@ export async function authenticate(
   }
 }
 
-export async function deleteCustomer (id: string) {
+export async function deleteCustomer(id: string) {
+  let errorCode: 'has-invoices' | 'delete-failed' | null = null;
+
   try {
-    await sql.begin(async (tx) => {
-      await tx`DELETE FROM invoices WHERE customer_id = ${id}`;
-      await tx`DELETE FROM customers WHERE id = ${id}`;
-    });
-    revalidatePath('/dashboard/customers');
-    revalidatePath('/dashboard/invoices');
-    revalidatePath('/dashboard');
-  } catch (error) {
+    const [{ count }] = await sql<{ count: number }[]>`
+      SELECT COUNT(*)::int AS count FROM invoices WHERE customer_id = ${id}
+    `;
+
+    if (count > 0) {
+      errorCode = 'has-invoices';
+    } else {
+      await sql`DELETE FROM customers WHERE id = ${id}`;
+    }
+  } catch (error: any) {
     console.error(error);
+    // 23503 = foreign_key_violation (сработает после шага 2)
+    errorCode = error.code === '23503' ? 'has-invoices' : 'delete-failed';
   }
+
+  if (errorCode) {
+    redirect(`/dashboard/customers?error=${errorCode}`);
+  }
+
+  revalidatePath('/dashboard/customers');
+  revalidatePath('/dashboard');
+  redirect('/dashboard/customers');
 }
